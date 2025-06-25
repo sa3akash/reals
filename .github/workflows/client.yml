@@ -113,12 +113,12 @@ jobs:
         docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${{ steps.get_version.outputs.VERSION }}
 
     - name: 🔎 Trivy Scan (latest)
-      uses: ./.github/workflows/trivy-scan.yml
+      uses: ./trivy-scan.yml
       with:
         image: sa2avroo/testing-nextjs:latest
 
     - name: 🔎 Trivy Scan (versioned)
-      uses: ./.github/workflows/trivy-scan.yml
+      uses: ./trivy-scan.yml
       with:
         image: sa2avroo/testing-nextjs:${{ steps.get_version.outputs.VERSION }}
 
