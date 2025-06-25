@@ -12,7 +12,12 @@ on:
       version:
         required: true
         type: string
-
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+        
 jobs:
   docker_build:
     runs-on: ubuntu-latest

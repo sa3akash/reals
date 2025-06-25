@@ -9,7 +9,12 @@ on:
       version:
         required: true
         type: string
-
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+        
 jobs:
   push:
     runs-on: ubuntu-latest
