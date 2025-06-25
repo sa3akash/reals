@@ -1,4 +1,4 @@
-name: 🧱 CI/CD Client
+name: 🧱 CI/CD Server
 
 on:
   push:
@@ -18,37 +18,37 @@ jobs:
     needs: get_version
     uses: ./.github/workflows/common/install-lint.yml
     with:
-      path: client
+      path: server
 
   build:
     needs: install_lint
     uses: ./.github/workflows/common/build-app.yml
     with:
-      path: client
+      path: server
 
   docker_build:
     needs: build
     uses: ./.github/workflows/common/docker-build.yml
     with:
-      path: client
-      image: sa2avroo/testing-nextjs
+      path: server
+      image: sa2avroo/testing-server
       version: ${{ needs.get_version.outputs.version }}
 
   trivy_latest:
     needs: docker_build
     uses: ./.github/workflows/common/trivy-scan.yml
     with:
-      image: sa2avroo/testing-nextjs:latest
+      image: sa2avroo/testing-server:latest
 
   trivy_versioned:
     needs: docker_build
     uses: ./.github/workflows/common/trivy-scan.yml
     with:
-      image: sa2avroo/testing-nextjs:${{ needs.get_version.outputs.version }}
+      image: sa2avroo/testing-server:${{ needs.get_version.outputs.version }}
 
   push:
     needs: [ trivy_latest, trivy_versioned ]
     uses: ./.github/workflows/common/docker-push.yml
     with:
-      image: sa2avroo/testing-nextjs
+      image: sa2avroo/testing-server
       version: ${{ needs.get_version.outputs.version }}

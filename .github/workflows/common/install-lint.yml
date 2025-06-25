@@ -1,0 +1,25 @@
+name: 📦 Install & Lint
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        required: true
+        type: string
+
+jobs:
+  install_lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📦 Install dependencies
+        working-directory: ${{ inputs.path }}
+        run: npm install --legacy-peer-deps
+
+      - name: 🧹 Lint
+        working-directory: ${{ inputs.path }}
+        run: npm run lint

@@ -1,0 +1,204 @@
+name: 🚀 Multi-job CI/CD pipeline for Client & Server
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CLIENT_IMAGE: sa2avroo/testing-nextjs
+  SERVER_IMAGE: sa2avroo/testing-server
+
+jobs:
+  # -------------------
+  # Install dependencies
+  # -------------------
+  install:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    name: 📦 Install dependencies for ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install npm dependencies
+        run: |
+          cd ${{ matrix.service }}
+          npm install --legacy-peer-deps
+
+  # ---------
+  # Lint job
+  # ---------
+  lint:
+    needs: install
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    name: 🧹 Lint ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Run lint
+        run: |
+          cd ${{ matrix.service }}
+          npm run lint
+
+  # ---------
+  # Build job
+  # ---------
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    name: 🏗️ Build ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Build project
+        run: |
+          cd ${{ matrix.service }}
+          # Build only client because server might be pure node API
+          if [ "${{ matrix.service }}" = "client" ]; then
+            npm run build
+          else
+            echo "No build step for server"
+          fi
+
+  # -------------------
+  # Docker image build
+  # -------------------
+  docker_build:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    name: 🐳 Docker build ${{ matrix.service }}
+    env:
+      CLIENT_IMAGE: ${{ env.CLIENT_IMAGE }}
+      SERVER_IMAGE: ${{ env.SERVER_IMAGE }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME=""
+          if [ "${{ matrix.service }}" = "client" ]; then
+            IMAGE_NAME=${CLIENT_IMAGE}
+          else
+            IMAGE_NAME=${SERVER_IMAGE}
+          fi
+
+          docker build -t $IMAGE_NAME:latest ./${{ matrix.service }}
+          docker tag $IMAGE_NAME:latest $IMAGE_NAME:${{ steps.get_version.outputs.VERSION }}
+
+  # --------------
+  # Trivy scanning
+  # --------------
+  trivy_scan:
+    needs: docker_build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    env:
+      CLIENT_IMAGE: ${{ env.CLIENT_IMAGE }}
+      SERVER_IMAGE: ${{ env.SERVER_IMAGE }}
+    steps:
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Scan latest image
+        run: |
+          IMAGE_NAME=""
+          if [ "${{ matrix.service }}" = "client" ]; then
+            IMAGE_NAME=${CLIENT_IMAGE}
+          else
+            IMAGE_NAME=${SERVER_IMAGE}
+          fi
+          echo "Scanning $IMAGE_NAME:latest"
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $IMAGE_NAME:latest
+
+      - name: Scan versioned image
+        run: |
+          IMAGE_NAME=""
+          if [ "${{ matrix.service }}" = "client" ]; then
+            IMAGE_NAME=${CLIENT_IMAGE}
+          else
+            IMAGE_NAME=${SERVER_IMAGE}
+          fi
+          echo "Scanning $IMAGE_NAME:${{ github.ref_name }}"
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $IMAGE_NAME:${{ github.ref_name }}
+
+  # -------------
+  # Push Docker images
+  # -------------
+  push_images:
+    needs: trivy_scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [client, server]
+    env:
+      CLIENT_IMAGE: ${{ env.CLIENT_IMAGE }}
+      SERVER_IMAGE: ${{ env.SERVER_IMAGE }}
+    steps:
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push images
+        run: |
+          IMAGE_NAME=""
+          if [ "${{ matrix.service }}" = "client" ]; then
+            IMAGE_NAME=${CLIENT_IMAGE}
+          else
+            IMAGE_NAME=${SERVER_IMAGE}
+          fi
+          echo "Pushing $IMAGE_NAME:latest"
+          docker push $IMAGE_NAME:latest
+          echo "Pushing $IMAGE_NAME:${{ github.ref_name }}"
+          docker push $IMAGE_NAME:${{ github.ref_name }}
