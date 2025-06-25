@@ -11,27 +11,27 @@ jobs:
   trivy:
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Checkout
-      uses: actions/checkout@v3
+      - name: 📥 Checkout
+        uses: actions/checkout@v3
 
-    - name: 📥 Download Image
-      uses: actions/download-artifact@v4
-      with:
-        name: docker-images
+      - name: 📥 Download Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
 
-    - name: 📦 Load Docker Images
-      run: |
-        docker load -i image_latest.tar || true
-        docker load -i image_versioned.tar || true
+      - name: 📦 Load Docker Images
+        run: |
+          docker load -i image_latest.tar || true
+          docker load -i image_versioned.tar || true
 
-    - name: 🛠️ Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-        sudo apt-get update
-        sudo apt-get install -y trivy
+      - name: 🛠️ Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
-    - name: 🔎 Run Trivy Scan
-      run: trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ format('{0}:{1}', inputs.image, inputs.version) }}
+      - name: 🔎 Run Trivy Scan
+        run: trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ inputs.image }}

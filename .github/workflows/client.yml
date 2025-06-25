@@ -42,13 +42,13 @@ jobs:
     needs: docker
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: ${{ needs.setup.outputs.image }}:latest
+      image: ${{ format('{0}:latest', needs.setup.outputs.image) }}
 
   trivy_versioned:
     needs: docker
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: ${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.version }}
+      image: ${{ format('{0}:{1}', needs.setup.outputs.image, needs.setup.outputs.version) }}
 
   push:
     needs: [trivy_latest, trivy_versioned]
