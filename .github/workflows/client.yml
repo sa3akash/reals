@@ -16,19 +16,19 @@ jobs:
 
   install_lint:
     needs: get_version
-    uses: ./.github/workflows/common/install-lint.yml
+    uses: sa3akash/reals/.github/workflows/install-lint.yml
     with:
       path: client
 
   build:
     needs: install_lint
-    uses: ./.github/workflows/common/build-app.yml
+    uses: sa3akash/reals/.github/workflows/build-app.yml
     with:
       path: client
 
   docker_build:
     needs: build
-    uses: ./.github/workflows/common/docker-build.yml
+    uses: sa3akash/reals/.github/workflows/docker-build.yml
     with:
       path: client
       image: sa2avroo/testing-nextjs
@@ -36,19 +36,19 @@ jobs:
 
   trivy_latest:
     needs: docker_build
-    uses: ./.github/workflows/common/trivy-scan.yml
+    uses: sa3akash/reals/.github/workflows/trivy-scan.yml
     with:
       image: sa2avroo/testing-nextjs:latest
 
   trivy_versioned:
     needs: docker_build
-    uses: ./.github/workflows/common/trivy-scan.yml
+    uses: sa3akash/reals/.github/workflows/trivy-scan.yml
     with:
       image: sa2avroo/testing-nextjs:${{ needs.get_version.outputs.version }}
 
   push:
     needs: [ trivy_latest, trivy_versioned ]
-    uses: ./.github/workflows/common/docker-push.yml
+    uses: sa3akash/reals/.github/workflows/docker-push.yml
     with:
       image: sa2avroo/testing-nextjs
       version: ${{ needs.get_version.outputs.version }}
