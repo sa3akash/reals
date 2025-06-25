@@ -103,13 +103,13 @@ jobs:
         node-version: '20' # Adjust as needed
 
     - name: Install dependencies
-      run: npm install --legacy-peer-deps
+      run: cd client && npm install --legacy-peer-deps
 
     - name: Run lint
-      run: npm run lint
+      run: cd client && npm run lint
 
     - name: Build Next.js app
-      run: npm run build
+      run: cd client && npm run build
 
     - name: Extract version from tag
       id: get_version
