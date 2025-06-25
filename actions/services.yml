@@ -1,0 +1,91 @@
+name: 🚀 Build, Scan & Push Docker Images for Multiple Services
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - client
+          - server
+
+    env:
+      CLIENT_IMAGE: sa2avroo/testing-nextjs
+      SERVER_IMAGE: sa2avroo/testing-server
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🧰 Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: 📦 Install dependencies
+        run: |
+          cd ${{ matrix.service }}
+          npm install --legacy-peer-deps
+
+      - name: 🧹 Lint ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          npm run lint
+
+      - name: 🏗️ Build ${{ matrix.service }} (if client)
+        if: matrix.service == 'client'
+        run: |
+          cd client
+          npm run build
+
+      - name: 🏷️ Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: 🔐 Docker Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 🐳 Build Docker image ${{ matrix.service }}
+        run: |
+          IMAGE_NAME=${{ matrix.service == 'client' && env.CLIENT_IMAGE || env.SERVER_IMAGE }}
+          docker build -t $IMAGE_NAME:latest ./${{ matrix.service }}
+          docker tag $IMAGE_NAME:latest $IMAGE_NAME:${{ steps.get_version.outputs.VERSION }}
+
+      - name: 📥 Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}
+
+      - name: 🛡️ Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: 🔍 Trivy Scan ${{ matrix.service }} latest
+        run: |
+          IMAGE_NAME=${{ matrix.service == 'client' && env.CLIENT_IMAGE || env.SERVER_IMAGE }}
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $IMAGE_NAME:latest
+
+      - name: 🔍 Trivy Scan ${{ matrix.service }} versioned
+        run: |
+          IMAGE_NAME=${{ matrix.service == 'client' && env.CLIENT_IMAGE || env.SERVER_IMAGE }}
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $IMAGE_NAME:${{ steps.get_version.outputs.VERSION }}
+
+      - name: 🚀 Push Docker images ${{ matrix.service }}
+        run: |
+          IMAGE_NAME=${{ matrix.service == 'client' && env.CLIENT_IMAGE || env.SERVER_IMAGE }}
+          docker push $IMAGE_NAME:latest
+          docker push $IMAGE_NAME:${{ steps.get_version.outputs.VERSION }}

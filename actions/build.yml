@@ -1,0 +1,111 @@
+name: 🚀 Next.js CI/CD with Trivy Security Scan on Tag
+
+on:
+  push:
+    tags:
+    - 'v*' # Trigger on version tags like v1.0.0
+    # branches:
+    #   - main
+    # pull_request:
+    #   branches:
+    #     - main
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
+
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v3
+
+    - name: 🧰 Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: 📦 Install dependencies
+      working-directory: ./client
+      run: npm install --legacy-peer-deps
+
+    - name: 🧹 Run lint
+      working-directory: ./client
+      run: npm run lint
+
+    - name: 🏗️ Build Next.js app
+      working-directory: ./client
+      run: npm run build
+
+    - name: 🏷️ Extract version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: 🛠️ Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🗃️ Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: 🔐 Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: 🐳 Build Docker image (with tags and cache)
+      uses: docker/build-push-action@v5
+      with:
+        context: ./client
+        push: false
+        tags: |
+          ${{ env.IMAGE_NAME_CLIENT }}:latest
+          ${{ env.IMAGE_NAME_CLIENT }}:${{ steps.get_version.outputs.VERSION }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        load: true # Needed for Trivy scan
+
+    - name: 📥 Cache Trivy vulnerability DB
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/trivy
+        key: trivy-db-${{ runner.os }}
+
+    - name: 🛡️ Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
+
+    - name: 🔍 Scan Docker image (latest)
+      run: |
+        echo "🔍 Scanning ${IMAGE_NAME_CLIENT}:latest..."
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:latest
+
+    - name: 🔍 Scan Docker image (versioned)
+      run: |
+        echo "🔍 Scanning ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}..."
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
+
+    - name: 📤 Push Docker images
+      run: |
+        echo "🚀 Pushing Docker images..."
+        docker push ${IMAGE_NAME_CLIENT}:latest
+        docker push ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
+
+# ==================================
+
+# git tag v1.2.3
+# git push origin v1.2.3 --tags
+
+
+# ==================================
