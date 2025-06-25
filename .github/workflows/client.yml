@@ -34,9 +34,9 @@ jobs:
       path: client
       image: ${{ needs.setup.outputs.image }}
       version: ${{ needs.setup.outputs.version }}
-    secrets:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    # secrets:
+    #   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+    #   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
   trivy_latest:
     needs: docker

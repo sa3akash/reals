@@ -14,7 +14,7 @@ on:
         required: true
       DOCKER_PASSWORD:
         required: true
-        
+
 jobs:
   push:
     runs-on: ubuntu-latest
@@ -37,5 +37,5 @@ jobs:
 
       - name: 🚀 Push to Docker Hub
         run: |
-          docker push ${{ inputs.image }}:latest
-          docker push ${{ inputs.image }}:${{ inputs.version }}
+          docker push ${{ format('{0}:latest', inputs.image) }}
+          docker push ${{ format('{0}:{1}', inputs.image, inputs.version) }}
