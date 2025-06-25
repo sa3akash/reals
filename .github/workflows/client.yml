@@ -5,6 +5,9 @@ on:
     tags:
     - 'v*'
 
+env:
+  IMAGE_NAME: sa2avroo/testing-nextjs
+
 jobs:
   get_version:
     runs-on: ubuntu-latest
@@ -31,24 +34,24 @@ jobs:
     uses: sa3akash/reals/.github/workflows/docker-build.yml@main
     with:
       path: client
-      image: sa2avroo/testing-nextjs
+      image: ${{ env.IMAGE_NAME }}
       version: ${{ needs.get_version.outputs.version }}
 
   trivy_latest:
     needs: docker_build
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: sa2avroo/testing-nextjs:latest
+      image: ${{ env.IMAGE_NAME }}:latest
 
   trivy_versioned:
     needs: docker_build
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: sa2avroo/testing-nextjs:${{ needs.get_version.outputs.version }}
+      image: ${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
 
   push:
     needs: [ trivy_latest, trivy_versioned ]
     uses: sa3akash/reals/.github/workflows/docker-push.yml@main
     with:
-      image: sa2avroo/testing-nextjs
+      image: ${{ env.IMAGE_NAME }}
       version: ${{ needs.get_version.outputs.version }}

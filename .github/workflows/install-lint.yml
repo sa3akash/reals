@@ -11,15 +11,26 @@ jobs:
   install_lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: 📥 Checkout
+        uses: actions/checkout@v3
+
+      - name: 🧰 Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      - name: 📦 Install dependencies
+      - name: 🗂️ Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.path }}/node_modules
+          key: ${{ runner.os }}-${{ inputs.path }}-${{ hashFiles(format('{0}/package-lock.json', inputs.path)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.path }}-
+
+      - name: 📦 Install Dependencies
         working-directory: ${{ inputs.path }}
         run: npm install --legacy-peer-deps
 
-      - name: 🧹 Lint
+      - name: 🧹 Run Linter
         working-directory: ${{ inputs.path }}
         run: npm run lint

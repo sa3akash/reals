@@ -1,3 +1,37 @@
+# name: 🔎 Trivy Scan
+
+# on:
+#   workflow_call:
+#     inputs:
+#       image:
+#         required: true
+#         type: string
+
+# jobs:
+#   scan:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/trivy
+#           key: trivy-db-${{ runner.os }}
+
+#       - name: 🛠️ Install Trivy
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+#           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+#           echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+#           sudo apt-get update
+#           sudo apt-get install -y trivy
+
+#       - name: 🔍 Scan Docker Image
+#         run: |
+#           trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ inputs.image }}
+
+
+
+
 name: 🔎 Trivy Scan
 
 on:
@@ -8,13 +42,21 @@ on:
         type: string
 
 jobs:
-  scan:
+  trivy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/cache@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v3
+
+      - name: 📥 Download Docker Image
+        uses: actions/download-artifact@v4
         with:
-          path: ~/.cache/trivy
-          key: trivy-db-${{ runner.os }}
+          name: docker-images
+
+      - name: 📦 Load Docker Images
+        run: |
+          docker load -i image_latest.tar || true
+          docker load -i image_versioned.tar || true
 
       - name: 🛠️ Install Trivy
         run: |
@@ -25,6 +67,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      - name: 🔍 Scan Docker Image
+      - name: 🔎 Trivy Scan
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ inputs.image }}

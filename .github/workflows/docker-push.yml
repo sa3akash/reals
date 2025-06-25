@@ -1,3 +1,32 @@
+# name: 🚀 Docker Push
+
+# on:
+#   workflow_call:
+#     inputs:
+#       image:
+#         required: true
+#         type: string
+#       version:
+#         required: true
+#         type: string
+
+# jobs:
+#   push:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: 🔐 Docker Login
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKER_USERNAME }}
+#           password: ${{ secrets.DOCKER_PASSWORD }}
+
+#       - name: 🚀 Push Docker Images
+#         run: |
+#           docker push ${{ inputs.image }}:latest
+#           docker push ${{ inputs.image }}:${{ inputs.version }}
+
+
+
 name: 🚀 Docker Push
 
 on:
@@ -19,6 +48,16 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 📥 Download Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+
+      - name: 📦 Load Docker Images
+        run: |
+          docker load -i image_latest.tar || true
+          docker load -i image_versioned.tar || true
 
       - name: 🚀 Push Docker Images
         run: |
