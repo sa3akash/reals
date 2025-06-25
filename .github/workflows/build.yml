@@ -79,75 +79,105 @@
 #         docker push ${IMAGE_NAME_SERVER}:${{ steps.get_version.outputs.VERSION }}
 
 
-name: Next.js CI/CD with Trivy Security Scan on Tag
+name: 🚀 Next.js CI/CD with Trivy Security Scan on Tag
 
-# Run only when a tag is pushed that matches v*, e.g., v1.2.3
 on:
   push:
     tags:
-    - 'v*'
+      - 'v*'  # Trigger on version tags like v1.0.0
 
 jobs:
-  build-and-push:
+  build-and-scan:
     runs-on: ubuntu-latest
 
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
+
     steps:
-    - name: Checkout code
+    - name: 📥 Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up Node.js
+    - name: 🧰 Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '20' # Adjust as needed
+        node-version: '20'
 
-    - name: Install dependencies
-      run: cd client && npm install --legacy-peer-deps
+    - name: 📦 Install dependencies
+      working-directory: ./client
+      run: npm install --legacy-peer-deps
 
-    - name: Run lint
-      run: cd client && npm run lint
+    - name: 🧹 Run lint
+      working-directory: ./client
+      run: npm run lint
 
-    - name: Build Next.js app
-      run: cd client && npm run build
+    - name: 🏗️ Build Next.js app
+      working-directory: ./client
+      run: npm run build
 
-    - name: Extract version from tag
+    - name: 🏷️ Extract version from tag
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    - name: Log in to Docker Hub
+    - name: 🛠️ Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🗃️ Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: 🔐 Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build Docker image with latest tag
-      run: |
-        docker build -t ${IMAGE_NAME_CLIENT}:latest ./client
+    - name: 🐳 Build Docker image (with tags and cache)
+      uses: docker/build-push-action@v5
+      with:
+        context: ./client
+        push: false
+        tags: |
+          ${{ env.IMAGE_NAME_CLIENT }}:latest
+          ${{ env.IMAGE_NAME_CLIENT }}:${{ steps.get_version.outputs.VERSION }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        load: true  # Needed for Trivy scan
 
-    - name: Tag Docker image with version
-      run: |
-        docker tag ${IMAGE_NAME_CLIENT}:latest ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
-    - name: Install Trivy
-      run: |
-        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.25.0_Linux-64bit.tar.gz
-        tar zxvf trivy_0.25.0_Linux-64bit.tar.gz
-        sudo mv trivy /usr/local/bin/
+    - name: 📥 Cache Trivy vulnerability DB
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/trivy
+        key: trivy-db-${{ runner.os }}
 
-    - name: Scan Docker image (latest)
+    - name: 🛡️ Install Trivy
       run: |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME_CLIENT}:latest
-      continue-on-error: false
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
 
-    - name: Scan Docker image (versioned)
+    - name: 🔍 Scan Docker image (latest)
       run: |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
-      continue-on-error: false
+        echo "🔍 Scanning ${IMAGE_NAME_CLIENT}:latest..."
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:latest
 
-    - name: Push Docker images
+    - name: 🔍 Scan Docker image (versioned)
       run: |
+        echo "🔍 Scanning ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}..."
+        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
+
+    - name: 📤 Push Docker images
+      run: |
+        echo "🚀 Pushing Docker images..."
         docker push ${IMAGE_NAME_CLIENT}:latest
         docker push ${IMAGE_NAME_CLIENT}:${{ steps.get_version.outputs.VERSION }}
+
 
 
 
