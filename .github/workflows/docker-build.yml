@@ -1,37 +1,3 @@
-# name: 🐳 Docker Build
-
-# on:
-#   workflow_call:
-#     inputs:
-#       path:
-#         required: true
-#         type: string
-#       image:
-#         required: true
-#         type: string
-#       version:
-#         required: true
-#         type: string
-
-# jobs:
-#   docker_build:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v3
-
-#       - name: 🔐 Docker Login
-#         uses: docker/login-action@v3
-#         with:
-#           username: ${{ secrets.DOCKER_USERNAME }}
-#           password: ${{ secrets.DOCKER_PASSWORD }}
-
-#       - name: 🛠️ Build Docker image
-#         run: |
-#           docker build -t ${{ inputs.image }}:latest ${{ inputs.path }}
-#           docker tag ${{ inputs.image }}:latest ${{ inputs.image }}:${{ inputs.version }}
-
-
-
 name: 🐳 Docker Build
 
 on:
@@ -60,17 +26,17 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: 🛠️ Build Docker Image
+      - name: 🛠️ Build & Tag Docker Images
         run: |
           docker build -t ${{ inputs.image }}:latest ${{ inputs.path }}
           docker tag ${{ inputs.image }}:latest ${{ inputs.image }}:${{ inputs.version }}
 
-      - name: 📦 Save Docker Image
+      - name: 📦 Save Docker Images
         run: |
           docker save ${{ inputs.image }}:latest -o image_latest.tar
           docker save ${{ inputs.image }}:${{ inputs.version }} -o image_versioned.tar
 
-      - name: 📤 Upload Image Artifacts
+      - name: 📤 Upload Images
         uses: actions/upload-artifact@v4
         with:
           name: docker-images

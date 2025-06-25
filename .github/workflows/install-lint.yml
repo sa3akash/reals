@@ -24,10 +24,8 @@ jobs:
         with:
           path: ${{ inputs.path }}/node_modules
           key: ${{ runner.os }}-${{ inputs.path }}-${{ hashFiles(format('{0}/package-lock.json', inputs.path)) }}
-          restore-keys: |
-            ${{ runner.os }}-${{ inputs.path }}-
 
-      - name: 📦 Install Dependencies
+      - name: 📦 Install Deps
         working-directory: ${{ inputs.path }}
         run: npm install --legacy-peer-deps
 

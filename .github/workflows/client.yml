@@ -1,24 +1,22 @@
-name: 🧱 CI/CD Client
+name: 🧱 Client CI/CD
 
 on:
   push:
     tags:
-    - 'v*'
-
-env:
-  IMAGE_NAME: sa2avroo/testing-nextjs
+      - 'v*'
 
 jobs:
-  get_version:
+  setup:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.tag.outputs.version }}
+      image: sa2avroo/testing-nextjs  # change acordingly
+      version: ${{ steps.v.outputs.version }}
     steps:
-    - id: tag
-      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - id: v
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
   install_lint:
-    needs: get_version
+    needs: setup
     uses: sa3akash/reals/.github/workflows/install-lint.yml@main
     with:
       path: client
@@ -29,29 +27,29 @@ jobs:
     with:
       path: client
 
-  docker_build:
-    needs: build
+  docker:
+    needs: [build, setup]
     uses: sa3akash/reals/.github/workflows/docker-build.yml@main
     with:
       path: client
-      image: ${{ env.IMAGE_NAME }}
-      version: ${{ needs.get_version.outputs.version }}
+      image: ${{ needs.setup.outputs.image }}
+      version: ${{ needs.setup.outputs.version }}
 
   trivy_latest:
-    needs: docker_build
+    needs: docker
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: ${{ env.IMAGE_NAME }}:latest
+      image: ${{ needs.setup.outputs.image }}:latest
 
   trivy_versioned:
-    needs: docker_build
+    needs: docker
     uses: sa3akash/reals/.github/workflows/trivy-scan.yml@main
     with:
-      image: ${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
+      image: ${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.version }}
 
   push:
-    needs: [ trivy_latest, trivy_versioned ]
+    needs: [trivy_latest, trivy_versioned]
     uses: sa3akash/reals/.github/workflows/docker-push.yml@main
     with:
-      image: ${{ env.IMAGE_NAME }}
-      version: ${{ needs.get_version.outputs.version }}
+      image: ${{ needs.setup.outputs.image }}
+      version: ${{ needs.setup.outputs.version }}
