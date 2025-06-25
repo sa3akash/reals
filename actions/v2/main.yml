@@ -1,0 +1,92 @@
+name: 🚀 Main CI/CD Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # Extract version from Git tag (e.g., v1.2.3 → 1.2.3)
+  get_version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+    steps:
+      - id: extract_version
+        run: echo "::set-output name=version::${GITHUB_REF#refs/tags/}"
+
+  # Client install & lint
+  client_install_lint:
+    needs: get_version
+    uses: ./.github/workflows/install-and-lint.yml
+    with:
+      service: client
+
+  # Client build
+  client_build:
+    needs: client_install_lint
+    uses: ./.github/workflows/build.yml
+    with:
+      service: client
+
+  # Client docker build
+  client_docker_build:
+    needs: client_build
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      service: client
+      image: sa2avroo/testing-nextjs
+      version: ${{ needs.get_version.outputs.version }}
+
+  # Client trivy scan
+  client_trivy_scan:
+    needs: client_docker_build
+    uses: ./.github/workflows/trivy-scan.yml
+    with:
+      image: sa2avroo/testing-nextjs:${{ needs.get_version.outputs.version }}
+
+  # Client docker push
+  client_docker_push:
+    needs: client_trivy_scan
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image: sa2avroo/testing-nextjs
+      version: ${{ needs.get_version.outputs.version }}
+
+  # Server install & lint
+  server_install_lint:
+    needs: get_version
+    uses: ./.github/workflows/install-and-lint.yml
+    with:
+      service: server
+
+  # Server build
+  server_build:
+    needs: server_install_lint
+    uses: ./.github/workflows/build.yml
+    with:
+      service: server
+
+  # Server docker build
+  server_docker_build:
+    needs: server_build
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      service: server
+      image: sa2avroo/testing-server
+      version: ${{ needs.get_version.outputs.version }}
+
+  # Server trivy scan
+  server_trivy_scan:
+    needs: server_docker_build
+    uses: ./.github/workflows/trivy-scan.yml
+    with:
+      image: sa2avroo/testing-server:${{ needs.get_version.outputs.version }}
+
+  # Server docker push
+  server_docker_push:
+    needs: server_trivy_scan
+    uses: ./.github/workflows/docker-push.yml
+    with:
+      image: sa2avroo/testing-server
+      version: ${{ needs.get_version.outputs.version }}

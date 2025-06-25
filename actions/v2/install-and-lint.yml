@@ -1,0 +1,31 @@
+name: 📦 Install & Lint
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service folder to run install and lint"
+        required: true
+        type: string
+
+jobs:
+  install-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🧰 Setup Node.js 20
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📦 Install npm dependencies
+        run: |
+          cd ${{ inputs.service }}
+          npm install --legacy-peer-deps
+
+      - name: 🧹 Run lint
+        run: |
+          cd ${{ inputs.service }}
+          npm run lint
