@@ -36,21 +36,16 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "20"
-          cache: 'npm'
-          cache-dependency-path: ./client/package-lock.json
 
-      - name: 📦 Install dependencies
-        working-directory: ./client
-        run: npm install --legacy-peer-deps
-
-      - name: 💾 Cache node_modules
+      - name: 🗂️ Cache node_modules
         uses: actions/cache@v4
-        id: node-modules-cache
         with:
-          path: ./client/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('./client/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          path: ${{ inputs.path }}/node_modules
+          key: ${{ runner.os }}-${{ inputs.path }}-${{ hashFiles(format('{0}/package-lock.json', inputs.path)) }}
+
+      - name: 📦 Install Deps
+        working-directory: ${{ inputs.path }}
+        run: npm install --legacy-peer-deps
 
   test:
     needs: [setup, install]
@@ -59,11 +54,34 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
-      - name: 🧹 Run lint
-        working-directory: ./client
+      - name: 🗂️ Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.path }}/node_modules
+          key: ${{ runner.os }}-${{ inputs.path }}-${{ hashFiles(format('{0}/package-lock.json', inputs.path)) }}
+
+      - name: 🧹 Run Linter
+        working-directory: ${{ inputs.path }}
         run: npm run lint
 
-  build:
+  code-check:
+    needs: [setup, install]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 🗂️ Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.path }}/node_modules
+          key: ${{ runner.os }}-${{ inputs.path }}-${{ hashFiles(format('{0}/package-lock.json', inputs.path)) }}
+
+      - name: 🧪 Build
+        working-directory: ${{ inputs.path }}
+        run: npm run build
+
+  build-image:
     needs: [setup, install, test]
     runs-on: ubuntu-latest
     env:
@@ -71,10 +89,6 @@ jobs:
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
-
-      - name: 🏗️ Build Next.js app
-        working-directory: ./client
-        run: npm run build
 
       - name: 🛠️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -110,6 +124,20 @@ jobs:
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - name: 📦 Save Docker Images
+        run: |
+          docker save ${{ env.IMAGE_NAME_CLIENT }}:latest -o image_latest.tar
+          docker save ${{ env.IMAGE_NAME_CLIENT }}:${{ needs.setup.outputs.version }} -o image_versioned.tar
+          docker save ${{ env.IMAGE_NAME_CLIENT }}:${{ github.sha }} -o image_sha.tar
+
+      - name: 📤 Upload Images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: |
+            image_latest.tar
+            image_versioned.tar
+            image_sha.tar
 
   scan:
     needs: build
@@ -117,11 +145,19 @@ jobs:
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
     steps:
-      - name: 📥 Cache Trivy vulnerability DB
-        uses: actions/cache@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v3
+
+      - name: 📥 Download Image
+        uses: actions/download-artifact@v4
         with:
-          path: ~/.cache/trivy
-          key: trivy-db-${{ runner.os }}
+          name: docker-images
+
+      - name: 📦 Load Docker Images
+        run: |
+          docker load -i image_latest.tar || true
+          docker load -i image_versioned.tar || true
+          docker load -i image_sha.tar || true
 
       - name: 🛡️ Install Trivy
         run: |
@@ -149,6 +185,17 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 📥 Download Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+
+      - name: 📦 Load Docker Images
+        run: |
+          docker load -i image_latest.tar || true
+          docker load -i image_versioned.tar || true
+          docker load -i image_sha.tar || true
 
       - name: 📤 Push Docker images
         run: |
