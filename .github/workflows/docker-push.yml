@@ -7,9 +7,9 @@ on:
     tags:
       - "v*" # Trigger on version tags like v1.0.0
 
-
 env:
   WORKING_DIR: ./client # Define once for all jobs
+  IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
 
 jobs:
   setup:
@@ -94,8 +94,7 @@ jobs:
   build-image:
     needs: [setup, install, build-code, lint]
     runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
+
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
@@ -146,10 +145,9 @@ jobs:
           retention-days: 1
 
   scan:
-    needs: build-image
+    needs: [setup, build-image]
     runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
+
     steps:
       - name: 📥 Download Images
         uses: actions/download-artifact@v4
