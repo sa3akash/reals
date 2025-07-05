@@ -89,7 +89,7 @@ jobs:
         run: npm run build
 
   build-image:
-    needs: [setup, install, test]
+    needs: [setup, install,check-code, test-code]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
@@ -175,7 +175,7 @@ jobs:
           trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ github.sha }}
 
   push:
-    needs: [build, scan]
+    needs: [build-image, scan]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
