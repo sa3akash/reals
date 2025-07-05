@@ -1,12 +1,12 @@
+name: Build, Test, Scan and Push
+
 on:
   push:
+    branches:
+      - main
     # tags:
     #   - "v*" # Trigger on version tags like v1.0.0
-    branches:
-    - main
-    # pull_request:
-    #   branches:
-    #     - main
+
 
 jobs:
   setup:
@@ -14,80 +14,102 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.VERSION }}
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v3
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
 
-    - name: 🏷️ Extract version from tag
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: 🏷️ Get version from package.json
+        id: get_version
+        working-directory: ./client
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Using version: ${VERSION}"
 
-  test:
+  install:
     needs: setup
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v3
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
 
-    - name: 🧰 Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: "20"
+      - name: 🧰 Set up Node.js with caching
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: ./client/package-lock.json
 
-    - name: 📦 Install dependencies
-      working-directory: ./client
-      run: npm install --legacy-peer-deps
+      - name: 📦 Install dependencies
+        working-directory: ./client
+        run: npm install --legacy-peer-deps
 
-    - name: 🧹 Run lint
-      working-directory: ./client
-      run: npm run lint
+      - name: 💾 Cache node_modules
+        uses: actions/cache@v4
+        id: node-modules-cache
+        with:
+          path: ./client/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('./client/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+  test:
+    needs: [setup, install]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 🧹 Run lint
+        working-directory: ./client
+        run: npm run lint
 
   build:
-    needs: [ setup, test ]
+    needs: [setup, install, test]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v3
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
 
-    - name: 🧰 Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: "20"
+      - name: 🏗️ Build Next.js app
+        working-directory: ./client
+        run: npm run build
 
-    - name: 🏗️ Build Next.js app
-      working-directory: ./client
-      run: npm run build
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: 🛠️ Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: 🔐 Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: 🗃️ Cache Docker layers
-      uses: actions/cache@v4
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
+      - name: 🗃️ Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
-    - name: 🔐 Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: 🐳 Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          push: false
+          tags: |
+            ${{ env.IMAGE_NAME_CLIENT }}:latest
+            ${{ env.IMAGE_NAME_CLIENT }}:${{ needs.setup.outputs.version }}
+            ${{ env.IMAGE_NAME_CLIENT }}:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          load: true
 
-    - name: 🐳 Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./client
-        push: false
-        tags: |
-          ${{ env.IMAGE_NAME_CLIENT }}:latest
-          ${{ env.IMAGE_NAME_CLIENT }}:${{ needs.setup.outputs.version }}
-          ${{ env.IMAGE_NAME_CLIENT }}:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        load: true
+      - name: 🔄 Update Docker cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   scan:
     needs: build
@@ -95,47 +117,41 @@ jobs:
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
     steps:
-    - name: 📥 Cache Trivy vulnerability DB
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/trivy
-        key: trivy-db-${{ runner.os }}
+      - name: 📥 Cache Trivy vulnerability DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}
 
-    - name: 🛡️ Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
-        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-        sudo apt-get update
-        sudo apt-get install -y trivy
+      - name: 🛡️ Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
-    - name: 🔍 Scan Docker image (latest)
-      run: |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:latest
-
-    - name: 🔍 Scan Docker image (versioned)
-      run: |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ needs.setup.outputs.version }}
-
-    - name: 🔍 Scan Docker image (sha)
-      run: |
-        trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ github.sha }}
+      - name: 🔍 Scan Docker images
+        run: |
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:latest
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ needs.setup.outputs.version }}
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ github.sha }}
 
   push:
-    needs: [ build, scan ]
+    needs: [build, scan]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
     steps:
-    - name: 🔐 Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: 🔐 Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: 📤 Push Docker images
-      run: |
-        docker push ${IMAGE_NAME_CLIENT}:latest
-        docker push ${IMAGE_NAME_CLIENT}:${{ needs.setup.outputs.version }}
-        docker push ${IMAGE_NAME_CLIENT}:${{ github.sha }}
+      - name: 📤 Push Docker images
+        run: |
+          docker push ${IMAGE_NAME_CLIENT}:latest
+          docker push ${IMAGE_NAME_CLIENT}:${{ needs.setup.outputs.version }}
+          docker push ${IMAGE_NAME_CLIENT}:${{ github.sha }}
