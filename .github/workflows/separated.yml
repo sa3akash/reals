@@ -2,11 +2,14 @@ name: Build, Test, Scan and Push
 
 on:
   push:
-    branches:
-      - main
+    # branches:
+    #   - main
+    tags:
+      - "v*" # Trigger on version tags like v1.0.0
+
 
 env:
-  WORKING_DIR: ./client  # Define once for all jobs
+  WORKING_DIR: ./client # Define once for all jobs
 
 jobs:
   setup:
@@ -36,7 +39,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "20"
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
 
       - name: 🗂️ Cache node_modules
@@ -54,7 +57,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: npx next --version
 
-  test-code:
+  lint:
     needs: [setup, install]
     runs-on: ubuntu-latest
     steps:
@@ -71,8 +74,8 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: npx next lint
 
-  check-code:
-    needs: [setup, install]
+  build-code:
+    needs: [setup, install, lint]
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout repository
@@ -89,7 +92,7 @@ jobs:
         run: npm run build
 
   build-image:
-    needs: [setup, install,check-code, test-code]
+    needs: [setup, install, build-code, lint]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
@@ -202,3 +205,10 @@ jobs:
           docker push ${IMAGE_NAME_CLIENT}:latest
           docker push ${IMAGE_NAME_CLIENT}:${{ needs.setup.outputs.version }}
           docker push ${IMAGE_NAME_CLIENT}:${{ github.sha }}
+
+# ==================================
+
+# git tag v1.2.3
+# git push origin v1.2.3 --tags
+
+# ==================================
