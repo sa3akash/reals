@@ -176,7 +176,7 @@ jobs:
           trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress ${IMAGE_NAME_CLIENT}:${{ github.sha }}
 
   push:
-    needs: [build-image, scan]
+    needs: [setup, build-image, scan]
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME_CLIENT: sa2avroo/testing-nextjs
