@@ -2,8 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useFileUploads } from "@/hooks/useFileUploads";
-import { deleteFileApi, generatePresignedUrlApi } from "@/lib/uploadFile";
+import { useFileChunksUpload } from "@/hooks/useFileUploads";
+import {
+  completeMultipartUploadApi,
+  deleteFileApi,
+  generateChunkPresignedUrlApi,
+  initiateMultipartUploadApi,
+} from "@/lib/uploadFile";
 import { cn } from "@/lib/utils";
 import { Loader2, Trash2 } from "lucide-react";
 import React, { useCallback } from "react";
@@ -11,15 +16,17 @@ import { FileRejection, useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 
 const UploadPage = () => {
-  const { files, setFiles, uploadFile, removeFile } = useFileUploads({
-    generatePresignedUrl: generatePresignedUrlApi,
-
-    deleteFile: async(key:string)=>{
-      const response = await deleteFileApi(key);
-      toast.success("File deleted successfully");
-      return response;
-    },
-  });
+  const { files, setFiles, uploadFileInChunks, removeFile } =
+    useFileChunksUpload({
+      initiateMultipartUpload: initiateMultipartUploadApi,
+      generateChunkPresignedUrl: generateChunkPresignedUrlApi,
+      completeMultipartUpload: completeMultipartUploadApi,
+      deleteFile: async (key: string) => {
+        const response = await deleteFileApi(key);
+        toast.success("File deleted successfully");
+        return response;
+      },
+    });
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -40,10 +47,10 @@ const UploadPage = () => {
           })),
         ]);
 
-        acceptedFiles.forEach((file) => uploadFile(file));
+        acceptedFiles.forEach((file) => uploadFileInChunks(file));
       }
     },
-    [setFiles, uploadFile]
+    [setFiles, uploadFileInChunks]
   );
 
   const onDropRejected = useCallback((fileRejection: FileRejection[]) => {
@@ -69,14 +76,14 @@ const UploadPage = () => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     onDropRejected,
-    maxFiles: 10, // Limit to 5 files
+    maxFiles: 1, // Limit to 5 files
     accept: {
-      "image/*": [], // Accept all image types
-      // "video/*": [], // Accept all video types
+      // "image/*": [], // Accept all image types
+      "video/*": [], // Accept all video types
       // 'application/pdf': [] // Accept PDF files
     },
-    multiple: true, // Allow multiple files
-    maxSize: 10 * 1024 * 1024, // Limit file size 200MB
+    multiple: false, // Allow multiple files
+    maxSize: 2000 * 1024 * 1024, // Limit file size 200MB
   });
 
   return (
@@ -99,7 +106,7 @@ const UploadPage = () => {
                 Drag &lsquo;n&lsquo; drop some files here, or click to select
                 files
               </p>
-              <Button>Select a file</Button>
+              <Button>Select a file and upload chunk</Button>
             </div>
           )}
         </CardContent>
@@ -108,7 +115,7 @@ const UploadPage = () => {
       <div className="flex flex-col gap-y-4">
         {files.map((file) => (
           <div key={file.id} className="relative flex gap-x-1">
-          <img src={file.objectUrl} alt={file.file.name} width={400} />
+            <video src={file.objectUrl} width={400} controls />
             <div>
               <p>{file.file.name}</p>
               <progress value={file.progress} max="100" />{" "}
