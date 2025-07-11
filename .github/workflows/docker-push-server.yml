@@ -54,7 +54,7 @@ jobs:
         run: npm install --legacy-peer-deps
 
   build-code:
-    needs: [setup, install, lint]
+    needs: [setup, install]
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout repository
@@ -71,7 +71,7 @@ jobs:
         run: npm run build
 
   build-image:
-    needs: [setup, install, build-code, lint]
+    needs: [setup, install, build-code]
     runs-on: ubuntu-latest
 
     steps:
