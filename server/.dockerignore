@@ -1,5 +1,5 @@
 node_modules
-Dockerfile
+Dockerfile*
 docker-compose*
 .dockerignore
 .git
@@ -13,4 +13,3 @@ helm-charts
 .editorconfig
 .idea
 coverage*
-.next
