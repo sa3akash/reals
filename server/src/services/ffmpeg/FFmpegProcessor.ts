@@ -27,7 +27,7 @@ export class FFmpegProcessor {
     { name: "4K", width: 3840, height: 2160, bitrate: "40000k" },
   ];
 
-  async transcode(inputPath: string, outputDir: string): Promise<void> {
+  public async transcode(inputPath: string, outputDir: string): Promise<void> {
     fs.mkdirSync(outputDir, { recursive: true });
 
     return new Promise<void>(async (resolve, reject) => {
@@ -165,7 +165,7 @@ export class FFmpegProcessor {
     }
   }
 
-  async generateThumbnails(
+  public async generateThumbnails(
     inputPath: string,
     outputDir: string
   ): Promise<void> {
@@ -195,7 +195,7 @@ export class FFmpegProcessor {
     );
   }
 
-  async convertSubtitles(srtPath: string, outDir: string) {
+  public async convertSubtitles(srtPath: string, outDir: string) {
     fs.mkdirSync(outDir, { recursive: true });
     const vtt = path.join(outDir, path.basename(srtPath, ".srt") + ".vtt");
     await new Promise((res, rej) =>
@@ -205,16 +205,17 @@ export class FFmpegProcessor {
 
   public async generateTimelinePreviewWithVTT(
     inputPath: string,
-    outputDir: string,
-    intervalSeconds = 10,
-    thumbWidth = 160,
-    thumbHeight = 90,
-    columns = 5
+    outputDir: string
   ): Promise<void> {
     fs.mkdirSync(outputDir, { recursive: true });
 
     const { duration } = await this.getVideoMetadata(inputPath);
+
+    const { columns, intervalSeconds, thumbHeight, thumbWidth } =
+      this.getTimelinePreviewConfig(duration);
+
     const thumbsCount = Math.floor(Number(duration) / intervalSeconds);
+
     const rows = Math.ceil(thumbsCount / columns);
     const spritePath = path.join(outputDir, "preview-strip.jpg");
     const vttPath = path.join(outputDir, "thumbs.vtt");
@@ -239,13 +240,22 @@ export class FFmpegProcessor {
 
     // Step 2: Build sprite from thumbnails
     await new Promise<void>((resolve, reject) => {
-      ffmpeg(path.join(tempThumbsDir, "thumb-%03d.jpg"))
+      ffmpeg(path.join(tempThumbsDir, "thumb-%03d.jpg").replace(/\\/g, "/"))
         .inputOptions(["-pattern_type", "sequence"])
-        .outputOptions([`-vf`, `tile=${columns}x${rows}`, "-q:v", "3"])
-        .output(spritePath)
+        .outputOptions([
+          `-vf`,
+          `tile=${columns}x${rows}`,
+          "-frames:v",
+          "1",
+          "-q:v",
+          "3",
+        ])
+        .format("mjpeg") // ✅ KEY FIX
+        .output(spritePath.replace(/\\/g, "/"))
         .on("end", () => resolve())
         .on("error", reject)
         .run();
+        // .on("stderr", (line) => console.error("FFmpeg sprite stderr:", line))
     });
 
     // Step 3: Generate thumbs.vtt
@@ -262,17 +272,33 @@ export class FFmpegProcessor {
       vttContent += `${start} --> ${end}\n`;
       vttContent += `preview-strip.jpg#xywh=${x},${y},${thumbWidth},${thumbHeight}\n\n`;
     }
+
     fs.writeFileSync(vttPath, vttContent);
 
     // Step 4: Clean up temp thumbnails
     fs.rmSync(tempThumbsDir, { recursive: true, force: true });
   }
 
+  private getTimelinePreviewConfig(duration: number) {
+    const thumbWidth = 160;
+
+    // 16:9 thumbnail size (adjust width for quality)
+    const thumbHeight = Math.round((thumbWidth * 9) / 16);
+
+    // Interval logic
+    const intervalSeconds = duration < 900 ? 5 : duration < 1800 ? 10 : 15;
+
+    // Column logic (number of thumbs per row in the sprite sheet)
+    const columns = duration < 900 ? 5 : duration < 1800 ? 8 : 10;
+
+    return { intervalSeconds, thumbWidth, thumbHeight, columns };
+  }
+
   private async formatVttTimestamp(seconds: number) {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
+    const ms = Math.floor((seconds - Math.floor(seconds)) * 1000);
 
     return `${this.pad(hrs)}:${this.pad(mins)}:${this.pad(secs)}.${this.pad(
       ms,
@@ -382,136 +408,84 @@ export class FFmpegProcessor {
 
 // ====================
 
-// public async generateTimelinePreview(
-//   inputPath: string,
-//   outputDir: string
-// ): Promise<void> {
-//   fs.mkdirSync(outputDir, { recursive: true });
+/*
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(path.join(tempThumbsDir, "thumb-%03d.jpg"))
+        .inputOptions(["-pattern_type", "sequence"])
+        .outputOptions([`-vf`, `tile=${columns}x${rows}`, "-q:v", "3"])
+        .output(spritePath)
+        .on("end", () => resolve())
+        .on("stderr", line => console.error("FFmpeg sprite stderr:", line))
+        .on("error", reject)
+        .run();
+    });
 
-//   const tempThumbDir = path.join(outputDir, "timeline-temp");
-//   fs.mkdirSync(tempThumbDir, { recursive: true });
 
-//   const thumbSize = "160x90";
+    public async generateTimelinePreviewWithVTT(
+    inputPath: string,
+    outputDir: string,
+    intervalSeconds = 10,
+    thumbWidth = 160,
+    thumbHeight = 90,
+    columns = 5
+  ): Promise<void> {
+    fs.mkdirSync(outputDir, { recursive: true });
 
-//   // 1. Generate thumbnails every 10 seconds
-//   await new Promise<void>((resolve, reject) => {
-//     ffmpeg(inputPath)
-//       .outputOptions(["-vf", `fps=1/10,scale=${thumbSize}`, "-qscale:v", "5"])
-//       .output(path.join(tempThumbDir, "thumb-%03d.jpg"))
-//       .on("end", () => resolve())
-//       .on("error", reject)
-//       .run();
-//   });
+    const { duration } = await this.getVideoMetadata(inputPath);
+    const thumbsCount = Math.floor(Number(duration) / intervalSeconds);
+    const rows = Math.ceil(thumbsCount / columns);
+    const spritePath = path.join(outputDir, "preview-strip.jpg");
+    const vttPath = path.join(outputDir, "thumbs.vtt");
+    const tempThumbsDir = path.join(outputDir, "temp");
 
-//   // 2. Read all thumbnails
-//   const thumbFiles = fs
-//     .readdirSync(tempThumbDir)
-//     .filter((f) => f.endsWith(".jpg"))
-//     .sort();
+    fs.mkdirSync(tempThumbsDir, { recursive: true });
 
-//   const buffers = await Promise.all(
-//     thumbFiles.map((f) => fs.promises.readFile(path.join(tempThumbDir, f)))
-//   );
+    // Step 1: Extract thumbnails every X seconds
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(inputPath)
+        .outputOptions([
+          "-vf",
+          `fps=1/${intervalSeconds},scale=${thumbWidth}:${thumbHeight}`,
+          "-q:v",
+          "3",
+        ])
+        .output(path.join(tempThumbsDir, "thumb-%03d.jpg"))
+        .on("end",()=>resolve())
+        .on("error", reject)
+        .run();
+    });
 
-//   // 3. Compose sprite horizontally
-//   const sprite = sharp({
-//     create: {
-//       width: 160 * buffers.length,
-//       height: 90,
-//       channels: 3,
-//       background: "black",
-//     },
-//   });
+    // Step 2: Build sprite from thumbnails
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(path.join(tempThumbsDir, "thumb-%03d.jpg"))
+        .inputOptions(["-pattern_type", "sequence"])
+        .outputOptions([`-vf`, `tile=${columns}x${rows}`, "-q:v", "3"])
+        .output(spritePath)
+        .on("end",()=>resolve())
+        .on("error", reject)
+        .run();
+    });
 
-//   const composite = await sprite
-//     .composite(
-//       buffers.map((buf, i) => ({
-//         input: buf,
-//         left: i * 160,
-//         top: 0,
-//       }))
-//     )
-//     .jpeg()
-//     .toBuffer();
+    // Step 3: Generate thumbs.vtt
+    let vttContent = "WEBVTT\n\n";
+    for (let i = 0; i < thumbsCount; i++) {
+      const row = Math.floor(i / columns);
+      const col = i % columns;
+      const x = col * thumbWidth;
+      const y = row * thumbHeight;
 
-//   // 4. Save final sprite
-//   const spritePath = path.join(outputDir, "preview-strip.jpg");
-//   fs.writeFileSync(spritePath, composite);
+      const start = this.formatVttTimestamp(i * intervalSeconds);
+      const end = this.formatVttTimestamp((i + 1) * intervalSeconds);
 
-//   // 5. Cleanup temp thumbs
-//   fs.rmSync(tempThumbDir, { recursive: true, force: true });
-// }
+      vttContent += `${start} --> ${end}\n`;
+      vttContent += `preview-strip.jpg#xywh=${x},${y},${thumbWidth},${thumbHeight}\n\n`;
+    }
+    fs.writeFileSync(vttPath, vttContent);
 
-// =====================
+    // Step 4: Clean up temp thumbnails
+    fs.rmSync(tempThumbsDir, { recursive: true, force: true });
+  }
 
-// async transcode(inputPath: string, outputDir: string): Promise<void> {
-//   fs.mkdirSync(outputDir, { recursive: true });
 
-//   return new Promise<void>(async (resolve, reject) => {
-//     const { width } = await this.getVideoMetadata(inputPath);
-//     const applicableResolutions = this.getApplicableResolutions(width);
 
-//     const command = ffmpeg(inputPath)
-//       .addOption("-preset", "fast")
-//       .addOption("-g", "48")
-//       .addOption("-sc_threshold", "0");
-
-//     let filter = "";
-//     const outputOptions: string[] = [];
-
-//     applicableResolutions.forEach((res, i) => {
-//       filter += `[0:v]scale=w=${res.width}:h=${res.height}[v${i}];`;
-//       outputOptions.push(
-//         "-map",
-//         `[v${i}]`,
-//         "-map",
-//         "0:a?",
-//         `-c:v:${i}`,
-//         "libx264",
-//         `-b:v:${i}`,
-//         res.bitrate,
-//         "-maxrate",
-//         `${parseInt(res.bitrate) * 1.5}k`,
-//         "-bufsize",
-//         `${parseInt(res.bitrate) * 2}k`
-//       );
-//     });
-
-//     command
-//       .complexFilter(filter.slice(0, -1))
-//       .outputOptions([
-//         ...outputOptions,
-//         "-c:a",
-//         "aac",
-//         "-b:a",
-//         "128k",
-//         "-f",
-//         "hls",
-//         "-hls_time",
-//         "6",
-//         "-hls_list_size",
-//         "0",
-//         "-hls_segment_filename",
-//         `${outputDir}/%v/segment_%03d.ts`,
-//         "-var_stream_map",
-//         applicableResolutions
-//           .map(
-//             (_, i) => `v:${i},a:${i},name:${applicableResolutions[i].name}`
-//           )
-//           .join(" "),
-//         "-master_pl_name",
-//         "master.m3u8",
-//       ])
-//       .output(`${outputDir}/%v/playlist.m3u8`)
-//       .on("end", () => {
-//         resolve();
-//       })
-//       .on("progress", (progress) => {
-//         console.log(`Processing: ${Math.round(progress.percent || 0)}% done`);
-//       })
-//       .on("error", reject)
-//       .run();
-//   });
-// }
-
-// ===================
+*/

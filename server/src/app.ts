@@ -30,8 +30,7 @@ app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-const key =
-  "processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/video/original/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara..mp4";
+const key = "VSCode + Cline + Continue _ NEVER PAY for CURSOR again. Use this OPEN SOURCE _ LOCAL Alternative.mp4";
 
 // const encoder = new AdaptiveVideoProcessor();
 // encoder.processVideo(key)
@@ -51,6 +50,6 @@ app.use("/post", postRoutes.getRoutes());
 app.use(globalErrorHandler);
 
 app.listen(PORT, async () => {
-  await mongooseConnection();
+  // await mongooseConnection();
   console.log(`Server is running on http://localhost:${PORT}`);
 });

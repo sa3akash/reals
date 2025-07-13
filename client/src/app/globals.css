@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@import "video.js/dist/video-js.css";
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -238,4 +236,26 @@
 /* mobile snap smooth */
 .scroll-touch {
   touch-action: pan-y;
+}
+
+
+/* global.css or tailwind config */
+input[type="range"].range-thumb::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 9999px;
+  cursor: pointer;
+  border: 2px solid #fff;
+  margin-top: -4px;
+}
+
+input[type="range"].range-thumb::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 9999px;
+  cursor: pointer;
+  border: 2px solid #fff;
 }

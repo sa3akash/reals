@@ -1,26 +1,12 @@
 import { cn } from "@/lib/utils";
 import React, { useEffect, useRef, useState } from "react";
 import { SpriteThumbnail, parseVttSpriteFile } from "./thumbnail-parser";
+import { useVideoPlayerContext } from "../VideoPlayerContext";
 
-interface Props {
-  progress: number;
-  duration: number;
-  currentTime: number;
-  onSeek?: (percentage: number) => void;
-  className?: string;
-  buffered?: number; // percent 0–100
-  vttFile?: string;
-}
+const TimeLine = ({ className, ...props }: React.ComponentProps<"div">) => {
+  const { vttFileUrl, seekTo, duration, buffered, progress,formatTime } =
+    useVideoPlayerContext();
 
-const TimeLine = ({
-  currentTime,
-  duration,
-  progress,
-  className,
-  onSeek,
-  buffered,
-  vttFile,
-}: Props) => {
   const [isHovering, setIsHovering] = useState(false);
   const [hoverProgress, setHoverProgress] = useState(0);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -33,35 +19,28 @@ const TimeLine = ({
   };
 
   useEffect(() => {
-    if (vttFile) {
-      parseVttSpriteFile(vttFile).then(setThumbnails);
+    if (vttFileUrl) {
+      parseVttSpriteFile(vttFileUrl).then(setThumbnails);
     }
-  }, [vttFile]);
-
-  const formatTime = (time: number) => {
-    const minites = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minites.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
-  };
+  }, [vttFileUrl]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!progressRef.current) return;
 
     const rect = progressRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = (x / rect.width) * 100;
 
-    const percentage = ((e.clientX - rect.left) / rect.width) * 100;
-
-    setHoverProgress(Math.max(0, Math.min(100, percentage)));
+    // Clamp to [0, 100]
+    setHoverProgress(Math.max(0, Math.min(100, percent)));
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    if (!progressRef.current || !onSeek) return;
+    if (!progressRef.current || !seekTo) return;
 
     const rect = progressRef.current.getBoundingClientRect();
     const percentage = ((e.clientX - rect.left) / rect.width) * 100;
-    onSeek(Math.max(0, Math.min(100, percentage)));
+    seekTo(Math.max(0, Math.min(100, percentage)));
   };
 
   const getHoverTime = () => {
@@ -69,14 +48,14 @@ const TimeLine = ({
   };
 
   return (
-    <div className={cn("text-white text-sm gap-3", className)}>
-      <span className="text-white text-xs font-medium shadow-lg min-w-[35px]">
+    <div className={cn("text-white text-sm px-2", className)} {...props}>
+      {/* <span className="text-white text-xs font-medium min-w-[35px]">
         {formatTime(currentTime)}
-      </span>
+      </span> */}
 
       <div
         ref={progressRef}
-        className="flex-1 relative group/progress cursor-pointer h-3"
+        className="flex-1 relative group/progress cursor-pointer h-3 "
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onMouseMove={handleMouseMove}
@@ -115,8 +94,8 @@ const TimeLine = ({
         )}
 
         {/* 🖼️ Hover Thumbnail */}
-        {isHovering && (
-          <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-50">
+        {isHovering && vttFileUrl && (
+          <div className="hidden md:block absolute top-0 left-0 w-full h-full pointer-events-none z-50">
             {(() => {
               const thumb = getThumbnailSprite();
               if (!thumb || !progressRef.current) return null;
@@ -159,11 +138,22 @@ const TimeLine = ({
             })()}
           </div>
         )}
+
+        {/* {isHovering && (
+          <div
+            className={cn(
+              "absolute -top-8 transform -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none"
+            )}
+            style={{ left: `${Math.max(1, Math.min(hoverProgress, 99))}%` }}
+          >
+            {formatTime(getHoverTime())}
+          </div>
+        )} */}
       </div>
 
-      <span className="text-white text-xs font-medium min-w-[35px] drop-shadow-lg">
+      {/* <span className="text-white text-xs font-medium min-w-[35px]">
         {formatTime(duration)}
-      </span>
+      </span> */}
     </div>
   );
 };

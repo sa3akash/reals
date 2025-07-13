@@ -1,14 +1,21 @@
-import VideoPlayer from "@/components/videoPlayer/VideoPlayer";
 import React from "react";
+
+import VideoPlayer from "@/components/videoPlayer/VideoPlayer";
 
 const VideoPlayerPage = () => {
   const src =
-    "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/hls/master.m3u8";
+    "https://t3.storage.dev/sa2uploads/processed/vscode-cline-continue-never-pay-for-cursor-again/hls/master.m3u8";
+  // const src =
+  //   "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/hls/master.m3u8";
 
   const poster =
-    "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/thumbnails/02.jpg";
+    "https://t3.storage.dev/sa2uploads/processed/vscode-cline-continue-never-pay-for-cursor-again/thumbnails/01.jpg";
+  // const poster =
+  //   "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/thumbnails/02.jpg";
   const vttFile =
-    "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/thumbnails/thumbs.vtt";
+    "https://t3.storage.dev/sa2uploads/processed/vscode-cline-continue-never-pay-for-cursor-again/thumbnails/thumbs.vtt";
+  // const vttFile =
+  //   "https://t3.storage.dev/sa2uploads/processed/e6278e54-d17b-4e5e-937e-d98fa744decdfull-video-raanjhan-do-patti-kriti-sanon-shaheer-sheikh-parampara-tandon-sachet-parampara/thumbnails/thumbs.vtt";
 
   const subtitles = [
     {
@@ -83,12 +90,10 @@ const VideoPlayerPage = () => {
     <div className="h-screen w-full flex items-center justify-center">
       <VideoPlayer
         poster={poster}
-        source={src}
+        source={[{ src: src, type: "application/x-mpegURL" }]}
         subtitles={subtitles}
-        thumbnailVttUrl={vttFile}
+        vttUrl={vttFile}
         chapters={chapters}
-        title="Hindi new song 2023 | Raanjhan Do Patti | Kriti Sanon | Shaheer Sheikh | Sachet Parampara"
-        description="Showcasing all video formats, instant loading, perfect fullscreen, and professional features"
         autoplay={false}
         muted={false}
         preload="metadata"

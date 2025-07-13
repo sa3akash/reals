@@ -16,6 +16,6 @@ export class S3Mover {
       Key: fromKey,
     }));
 
-    console.log(`Moved original: ${fromKey} → ${toKey}`);
+    // console.log(`Moved original: ${fromKey} → ${toKey}`);
   }
 }

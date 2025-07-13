@@ -35,13 +35,15 @@ export class VideoTranscoderService {
 
     const subtitleS3Key = false;
 
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true }); // 🧹 delete folder and contents
+    }
     fs.mkdirSync(tmpDir, { recursive: true });
-
     // 1. Download original video
     await this.downloader.download(s3Key, inputPath);
 
     // 2. Transcode to HLS
-    await this.processor.transcode(inputPath, hlsDir);
+    // await this.processor.transcode(inputPath, hlsDir);
     // await this.processor.transcodeToDash(inputPath, dashDir); // error
 
     // 3. Generate thumbnails
@@ -50,6 +52,7 @@ export class VideoTranscoderService {
     // await this.processor.generateTimelinePreviewWithVTT(inputPath, thumbDir);
 
     await Promise.all([
+      this.processor.transcode(inputPath, hlsDir),
       this.processor.generateThumbnails(inputPath, thumbDir),
       this.processor.generateTimelinePreviewWithVTT(inputPath, thumbDir),
     ]);
